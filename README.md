@@ -1,23 +1,25 @@
 # stitchfinder
 
-stitchfinder is a program which finds combinations of words which overlap with each other. It also checks if the two words,
-without the overlapping segment, are valid words. One such combination is `twinknight`. `twinknight` could mean "twink night"
-or "twin knight", both of which make sense but amount to the same text when the space is removed.
+stitchfinder is a program which finds combinations of words which overlap with each other, and checks if the two words
+without the overlapping segment are valid words.
+
+`twinknight` is one such combination, which could mean "twink night" or "twin knight". Both possibilities make sense,
+amount to the same text when the space is removed. This combination is what inspired the project, after I saw someone
+named it in a Halo lobby.
+
+There isn't much industrial purpose to this project. I do recommend using it to find cool words to use as usernames,
+project names, and whatever else you want :)
 
 ## Usage
 
-stitchfinder requires a list of valid words (see [Words File](#words-file), these are called **found words**) and the word
+stitchfinder requires a list of valid words (these are called **found words**) and the word
 to stitch with others, called the **given word**. It is invoked using:
 
 ```
 stitchfinder <words file> <given word>
 ```
 
-Invoking stitchfinder produces a table. Each row corresponds to a stitch, where the first column contains the **stitch word**.
-
-### Example Output
-
-The following is first 10 lines of `stitchfinder popular.txt twink`:
+For example, the following is first 10 lines of `stitchfinder popular.txt twink`:
 
 ```
  Stitched                  Pos-given   Pos-expans   Valid   I-sect   Expansion   Found               Rem-expans   Rem-found        
@@ -60,19 +62,19 @@ be a build that interacts transparently with Nushell.
 
 ## Words File
 
-The list of valid words must be a text file with a word on each line. This repository provides [big.txt] and
-[popular.txt] for the sake of convenience.
+The list of valid words must be a text file with a word on each line. This repository provides [big.txt](big.txt) and
+[popular.txt](popular.txt) for the sake of convenience.
 
-- [big.txt] was obtained from [this repository file](https://github.com/dwyl/english-words/blob/a77cb15f4f5beb59c15b945f2415328a6b33c3b0/words.txt)
+- [big.txt](big.txt) was obtained from [this repository file](https://github.com/dwyl/english-words/blob/a77cb15f4f5beb59c15b945f2415328a6b33c3b0/words.txt)
 and any words with non-alphabetical characters were removed.
-- [popular.txt] was obtained from [this repository file](https://github.com/dolph/dictionary/blob/c65f04b0b5b27a981f437b940cf62fe71320d5ec/popular.txt)
+- [popular.txt](popular.txt) was obtained from [this repository file](https://github.com/dolph/dictionary/blob/c65f04b0b5b27a981f437b940cf62fe71320d5ec/popular.txt)
 and had no filtering applied (there aren't any symbols to filter).
 
 ## Expansion
 
-Expansion is the first step of stitchfinder, and may be disabled with `--disable-expansion`. It takes the given word
-and expands it into as many words within the words file as possible (including the given word itself), and then tries
-to stitch using those words.
+Expansion is the first step of stitchfinder, and may be disabled with `--disable-expansion`. It uses the
+given word as-is, but also and expands it into as many found words as possible, and then tries to stitch
+using all of those words.
 
 For example, let `ia` be the given word. `ia` expands into:
 
