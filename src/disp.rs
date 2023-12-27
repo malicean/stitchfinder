@@ -1,3 +1,7 @@
+use core::fmt;
+use std::io::Write;
+
+use anyhow::Context;
 use rayon::{prelude::ParallelIterator, slice::ParallelSliceMut};
 use tabled::Table;
 
@@ -20,11 +24,30 @@ struct Row<'a> {
     #[tabled(rename = "Rem-found")]
     rem_found: &'a str,
 
-    #[tabled(rename = "Position")]
+    #[tabled(rename = "Pos")]
     pos: Position,
 
     #[tabled(rename = "Valid")]
     valid: bool,
+
+    #[tabled(rename = "X-given")]
+    expand_given: &'a str,
+
+    #[tabled(rename = "X-pos")]
+    expand_pos: OptPos,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
+struct OptPos(Option<Position>);
+
+impl fmt::Display for OptPos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if let Some(pos) = self.0 {
+            pos.fmt(f)
+        } else {
+            Ok(())
+        }
+    }
 }
 
 fn rows<'a>(combos: impl ParallelIterator<Item = Combo<'a>>) -> Vec<Row<'a>> {
@@ -40,6 +63,8 @@ fn rows<'a>(combos: impl ParallelIterator<Item = Combo<'a>>) -> Vec<Row<'a>> {
                 rem_found: parts.rem_found,
                 pos: parts.trans.pos,
                 valid: combo.valid,
+                expand_given: combo.expand.map_or("", |(x_given, _)| x_given),
+                expand_pos: OptPos(combo.expand.map(|(_, pos)| pos)),
             }
         })
         .collect();
@@ -48,11 +73,14 @@ fn rows<'a>(combos: impl ParallelIterator<Item = Combo<'a>>) -> Vec<Row<'a>> {
     vec
 }
 
-pub fn println<'a>(combos: impl ParallelIterator<Item = Combo<'a>>) {
+pub fn println<'a>(combos: impl ParallelIterator<Item = Combo<'a>>) -> anyhow::Result<()> {
     use tabled::settings::*;
 
     let mut table = Table::new(rows(combos));
     table.with(Style::blank()).with(Alignment::left());
 
-    println!("{table}");
+    std::io::stdout()
+        .lock()
+        .write_fmt(format_args!("{table}"))
+        .with_context(|| "failed to print results")
 }

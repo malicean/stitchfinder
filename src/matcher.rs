@@ -165,23 +165,52 @@ impl fmt::Display for Whole<'_> {
 pub struct Combo<'a> {
     pub stitch: Stitch<'a>,
     pub valid: bool,
+    pub expand: Option<(&'a str, Position)>,
+}
+
+/// Provides all the extrapolations of a given word. Does not include the given word itself.
+fn extrap<'i>(
+    given: &'i str,
+    founds: &'i HashSet<&str>,
+) -> impl ParallelIterator<Item = (&'i str, Position)> {
+    founds.par_iter().filter_map(move |&found| {
+        if given.len() >= found.len() {
+            None
+        } else if found.starts_with(given) {
+            Some((found, Position::Left))
+        } else if found.ends_with(given) {
+            Some((found, Position::Right))
+        } else {
+            None
+        }
+    })
 }
 
 pub fn find_all<'i>(
     given: &'i str,
     founds: &'i HashSet<&str>,
 ) -> impl ParallelIterator<Item = Combo<'i>> {
-    founds
+    let extrap = extrap(given, founds).map(|(found, pos)| (found, Some(pos)));
+    [(given, None)]
         .into_par_iter()
-        .map(|found| Pairing { given, found })
-        .flat_map(|pair| {
-            Position::all()
-                .into_par_iter()
-                .map(move |pos| Transform { pair, pos })
-        })
-        .flat_map(|trans| trans.stitches())
-        .map(move |stitch| Combo {
-            stitch,
-            valid: stitch.valid(founds),
+        .chain(extrap)
+        .flat_map(move |(expand_word, expand_pos)| {
+            founds
+                .par_iter()
+                .map(|&found| Pairing {
+                    given: expand_word,
+                    found,
+                })
+                .flat_map(|pair| {
+                    Position::all()
+                        .into_par_iter()
+                        .map(move |pos| Transform { pair, pos })
+                })
+                .flat_map(|trans| trans.stitches())
+                .map(move |stitch| Combo {
+                    stitch,
+                    valid: stitch.valid(founds),
+                    expand: expand_pos.map(|pos| (expand_word, pos)),
+                })
         })
 }

@@ -105,8 +105,6 @@ impl<'a> Ctx<'a> {
         // e.LENA
 
         let all = matcher::find_all(&self.given, &self.db);
-        disp::println(all);
-
-        Ok(())
+        disp::println(all)
     }
 }
