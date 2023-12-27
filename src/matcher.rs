@@ -6,13 +6,13 @@ use rayon::prelude::*;
 
 #[derive(Debug, Copy, Clone)]
 pub struct Pairing<'a> {
-    pub given: &'a str,
+    pub expans: &'a str,
     pub found: &'a str,
 }
 
 impl<'a> Pairing<'a> {
     fn max_isect_len(&self) -> usize {
-        usize::min(self.given.len(), self.found.len())
+        usize::min(self.expans.len(), self.found.len())
     }
 }
 
@@ -25,28 +25,24 @@ pub struct Transform<'a> {
 impl<'a> Transform<'a> {
     /// Fractures the transform into its intersection, remaining given, and remaining found (if the intersection exists)
     fn fracture(&self, isect_len: usize) -> Option<(&'a str, &'a str, &'a str)> {
-        let Pairing { given, found } = self.pair;
+        let Pairing { expans, found } = self.pair;
 
-        let (igiven, ifound, rgiven, rfound) = match self.pos {
+        let (iexpans, ifound, rexpans, rfound) = match self.pos {
             Position::Left => {
-                let (rgiven, igiven) = given.rsplit_at(isect_len);
+                let (rexpans, iexpans) = expans.rsplit_at(isect_len);
                 let (ifound, rfound) = found.split_at(isect_len);
 
-                (igiven, ifound, rgiven, rfound)
+                (iexpans, ifound, rexpans, rfound)
             }
             Position::Right => {
                 let (rfound, ifound) = found.rsplit_at(isect_len);
-                let (igiven, rgiven) = given.split_at(isect_len);
+                let (iexpans, rexpans) = expans.split_at(isect_len);
 
-                (igiven, ifound, rgiven, rfound)
+                (iexpans, ifound, rexpans, rfound)
             }
         };
 
-        // if "nacho" == found {
-        //     dbg!((igiven, ifound, rgiven, rfound));
-        // }
-
-        (igiven == ifound).then_some((igiven, rgiven, rfound))
+        (iexpans == ifound).then_some((iexpans, rexpans, rfound))
     }
 
     fn stitches(self) -> impl ParallelIterator<Item = Stitch<'a>> {
@@ -60,7 +56,7 @@ impl<'a> Transform<'a> {
 pub struct Stitch<'a> {
     trans: Transform<'a>,
     isect: &'a str,
-    rem_given: &'a str,
+    rem_expans: &'a str,
     rem_found: &'a str,
 }
 
@@ -71,7 +67,7 @@ impl<'a> Stitch<'a> {
             .map(|(isect, rem_given, rem_found)| Self {
                 trans,
                 isect,
-                rem_given,
+                rem_expans: rem_given,
                 rem_found,
             })
     }
@@ -79,18 +75,18 @@ impl<'a> Stitch<'a> {
     fn valid(&self, words: &HashSet<&str>) -> bool {
         let for_word = |word| word == "" || words.contains(word);
 
-        for_word(self.rem_given) && for_word(self.rem_found)
+        for_word(self.rem_expans) && for_word(self.rem_found)
     }
 
     pub fn whole(&self) -> Whole<'a> {
         match self.trans.pos {
             Position::Left => Whole {
-                left: self.trans.pair.given,
+                left: self.trans.pair.expans,
                 right: self.rem_found,
             },
             Position::Right => Whole {
                 left: self.rem_found,
-                right: self.trans.pair.given,
+                right: self.trans.pair.expans,
             },
         }
     }
@@ -104,7 +100,7 @@ impl<'a> Stitch<'a> {
 pub struct StitchParts<'a> {
     pub trans: Transform<'a>,
     pub isect: &'a str,
-    pub rem_given: &'a str,
+    pub rem_expans: &'a str,
     pub rem_found: &'a str,
 }
 
@@ -113,7 +109,7 @@ impl<'a> From<Stitch<'a>> for StitchParts<'a> {
         Self {
             trans: v.trans,
             isect: v.isect,
-            rem_given: v.rem_given,
+            rem_expans: v.rem_expans,
             rem_found: v.rem_found,
         }
     }
@@ -138,11 +134,11 @@ impl fmt::Display for Whole<'_> {
 pub struct Combo<'a> {
     pub stitch: Stitch<'a>,
     pub valid: bool,
-    pub expand: Option<(&'a str, Position)>,
+    pub pos_given: Option<Position>,
 }
 
-/// Provides all the extrapolations of a given word. Does not include the given word itself.
-fn extrap<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = (&'f str, Position)> {
+/// Provides all the expansions of a given word. Does not include the given word itself.
+fn expand<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = (&'f str, Position)> {
     let lambda: Box<dyn Fn(&&'f str) -> Option<(&'f str, Position)> + Send + Sync> =
         if ctx.disable_exp {
             Box::new(|_| None)
@@ -152,7 +148,7 @@ fn extrap<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = (&'f str, Positi
                     None
                 } else {
                     let starts = || found.starts_with(&ctx.given);
-                    let ends = || found.starts_with(&ctx.given);
+                    let ends = || found.ends_with(&ctx.given);
 
                     match ctx.exp_pos {
                         Some(Position::Left) => starts().then_some((found, Position::Left)),
@@ -177,18 +173,15 @@ fn extrap<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = (&'f str, Positi
 }
 
 pub fn find_all<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = Combo<'f>> {
-    let extrap = extrap(ctx).map(|(found, pos)| (found, Some(pos)));
+    let extrap = expand(ctx).map(|(found, pos)| (found, Some(pos)));
 
     [(ctx.given.as_str(), None)]
         .into_par_iter()
         .chain(extrap)
-        .flat_map(move |(expand_word, expand_pos)| {
+        .flat_map(move |(expans, pos_given)| {
             ctx.founds
                 .par_iter()
-                .map(|&found| Pairing {
-                    given: expand_word,
-                    found,
-                })
+                .map(|&found| Pairing { expans, found })
                 .flat_map(|pair| {
                     Position::all()
                         .into_par_iter()
@@ -199,7 +192,7 @@ pub fn find_all<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = Combo<'f>>
                 .map(move |stitch| Combo {
                     stitch,
                     valid: stitch.valid(&ctx.founds),
-                    expand: expand_pos.map(|pos| (expand_word, pos)),
+                    pos_given,
                 })
         })
         .filter(|combo| ctx.valid.map_or(true, |b| b == combo.valid))

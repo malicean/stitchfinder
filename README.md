@@ -14,39 +14,37 @@ stitchfinder <words file> <given word>
 ```
 
 Invoking stitchfinder produces a table. Each row corresponds to a stitch, where the first column contains the **stitch word**.
-Note that there might be multiple rows with the same stitch word; a stitch word can sometimes be produced multiple times from
-the same given word but different found words, e.g. `ali` produces `alice` with `ice` or `lice`.
-Also note that the stitch word might be the same as the given or found word; a found word may start/end with the given word
-and vice versa.
 
 ### Example Output
 
 The following is first 10 lines of `stitchfinder popular.txt twink`:
 
 ```
-Stitched                  Found               I-sect   Rem-given   Rem-found          Pos     Valid   X-given   X-pos 
-atwink                    at                  t        wink        a                  right   false                   
-atwinkle                  at                  t        winkle      a                  right   false   twinkle   left  
-abandonmentwink           abandonment         t        wink        abandonmen         right   false                   
-abandonmentwinkle         abandonment         t        winkle      abandonmen         right   false   twinkle   left  
-abbotwink                 abbot               t        wink        abbo               right   false                   
-abbotwinkle               abbot               t        winkle      abbo               right   false   twinkle   left  
-abductwink                abduct              t        wink        abduc              right   false                   
-abductwinkle              abduct              t        winkle      abduc              right   false   twinkle   left  
-abortwink                 abort               t        wink        abor               right   false                   
+ Stitched                  Pos-given   Pos-expans   Valid   I-sect   Expansion   Found               Rem-expans   Rem-found        
+ atwink                                right        false   t        twink       at                  wink         a                
+ atwinkle                  left        right        false   t        twinkle     at                  winkle       a                
+ abandonmentwink                       right        false   t        twink       abandonment         wink         abandonmen       
+ abandonmentwinkle         left        right        false   t        twinkle     abandonment         winkle       abandonmen       
+ abbotwink                             right        false   t        twink       abbot               wink         abbo             
+ abbotwinkle               left        right        false   t        twinkle     abbot               winkle       abbo             
+ abductwink                            right        false   t        twink       abduct              wink         abduc            
+ abductwinkle              left        right        false   t        twinkle     abduct              winkle       abduc            
+ abortwink                             right        false   t        twink       abort               wink         abor            
 ```
 
 The meaning of the columns is:
 
-- `Stitched`: stitched (final) words
-- `Found`: words from `popular.txt` which stitch into the given word (`twink`)
-- `I-sect` (intersection): text which the given word and each final word has, which allows the two to stitch together
-- `Rem-given` (remaining given): text of the given word without the intersection
-- `Rem-found` (remaining found): text of the found word without the intersection
-- `Pos` (position): where the given word is relative to the found word
-- `Valid`: whether the remaining given and found are valid words (i.e. are they in `popular.txt`)
-- `X-given` (expanded given): see [Expansion](#expansion)
-- `X-pos` (expanded position): see [Expansion](#expansion)
+- `Stitched`: the word which stiches `Expansion` and `Found` together, with the overlap being `I-sect`
+- `Pos-given` (position of given): where the given word is relative to `Expansion`. Blank when the expansion is the given word.
+- `Pos-expans` (position of expansion): where `Expansion` is relative to `Found` in `Stitched`.
+- `Valid`: whether the `Rem-expans` and `Rem-found` are valid words (i.e. are they in `popular.txt`)
+- `I-sect` (intersection): the overlapping text between `Expansion` and `Found`
+- `Expansion`: what the given word expanded to. May be the same as the given word.
+- `Found`: the other word
+- `Rem-given` (remaining given): text of the given word without `I-sect`
+- `Rem-found` (remaining found): text of `Found` without `I-sect`
+
+For more information about `Expansion` and `Pos-given`, see [Expansion](#expansion).
 
 ### With Nushell
 
@@ -72,53 +70,58 @@ and had no filtering applied (there aren't any symbols to filter).
 
 ## Expansion
 
-Expansion is a somewhat-complex feature of stitchfinder. It takes the given word and expands it into
-other, valid words, and then uses these expanded words as their own given words.  
+Expansion is the first step of stitchfinder, and may be disabled with `--disable-expansion`. It takes the given word
+and expands it into as many words within the words file as possible (including the given word itself), and then tries
+to stitch using those words.
 
 For example, let `ia` be the given word. `ia` expands into:
 
 - `iambic` from the left side, which stitches with
 	- `insignia` from the left side to make `insigniambic`
 	- `bicycle` from the right side to make `iambicycle`
-- `maria` from the right side, which stitches with
+- `aria` from the right side, which stitches with
 	- `avatar` from the left to make `avataria`
 	- `iambic` from the right to make `ariambic`
 
 Thus, the output includes:
 
 ```
-Stitched                        Found               I-sect   Rem-given       Rem-found          Pos     Valid   X-given          X-pos
-ariambic                        aria                ia       mbic            ar                 right   false   iambic           left  
-ariambic                        iambic              ia       ar              mbic               left    false   aria             right 
-avataria                        avatar              ar       ia              avat               right   false   aria             right 
-iambicycle                      bicycle             bic      iam             ycle               left    false   iambic           left  
-iambicycle                      cycle               c        iambi           ycle               left    false   iambic           left  
-insigniambic                    insignia            ia       mbic            insign             right   false   iambic           left  
-insigniambic                    iambic              ia       insign          mbic               left    false   insignia         right
+ Stitched                        Pos-given   Pos-expans   Valid   I-sect   Expansion        Found               Rem-expans      Rem-found        
+ ariambic                        left        right        false   ia       iambic           aria                mbic            ar               
+ ariambic                        right       left         false   ia       aria             iambic              ar              mbic             
+ avataria                        right       right        false   ar       aria             avatar              ia              avat             
+ iambicycle                      left        left         false   bic      iambic           bicycle             iam             ycle             
+ iambicycle                      left        left         false   c        iambic           cycle               iambi           ycle             
+ insigniambic                    left        right        false   ia       iambic           insignia            mbic            insign           
+ insigniambic                    right       left         false   ia       insignia         iambic              insign          mbic             
 ```
 
-Notice the two new columns: `X-given` and `X-pos`.
+Notice the two columns `Expansion` and `Pos-given`
 
-- `X-given` corresponds to what the given word was expanded into. For the first two lines, `ia` expanded into `iambic` and `aria`.
-- `X-pos` corresponds to which side of the expanded word the given word is on. For the first line, `ia` expanded to `iambic` from
-the left side, thus `X-pos` is `left`. In the second line, `ia` expanded to `aria` from the right side, so `X-pos` is `right`.
+- `Expansion` corresponds to what the given word expanded into.
+- `Pos-given` corresponds to where the given word is within the expansion.
 
-If `X-given` and `X-pos` are blank, it means no expansion occured, i.e. the given word was used as-is.
+In the first example, `Expansion` says that `ia` expanded into `iambic`. As stated earlier, it expands from the left side. This side matches with that of `Pos-given`.  
+Similarly, the second row has an `Expansion` of `aria`, which comes from the right side. This aligns with the tree from earlier and what `Pos-given` says.
+
+However, not every word can be expanded. When a row does not use expansion, i.e. it uses the given word as-is, `Pos-given` is blank and `Expansion` is the same as the
+given word. 
 
 ## Duplicate Stitched Words
 
-While the `Stitched` column is sorted, it may have duplicates. For example, the following is the output of `stitchfinder popular.txt ash`:
+While the `Stitched` column is sorted, it may have duplicates. For example, the following is included in the output of `stitchfinder popular.txt ash`:
 
 ```
-Stitched                    Found               I-sect   Rem-given   Rem-found          Pos     Valid   X-given     X-pos
-sodash                      sod                 d        ash         so                 right   true    dash        right 
-sodash                      soda                da       sh          so                 right   true    dash        right 
-sodash                      sodas               das      h           so                 right   false   dash        right 
-sodash                      soda                a        sh          sod                right   true                      
-sodash                      sodas               as       h           sod                right   false                     
+ Stitched                    Pos-given   Pos-expans   Valid   I-sect   Expansion   Found               Rem-expans   Rem-found        
+ sodash                      right       right        false   das      dash        sodas               h            so               
+ sodash                      right       right        true    d        dash        sod                 ash          so               
+ sodash                      right       right        true    da       dash        soda                sh           so               
+ sodash                                  right        false   as       ash         sodas               h            sod              
+ sodash                                  right        true    a        ash         soda                sh           sod              
 ```
 
-Even without expansion, `sodash` can be formed from `soda` + `ash` and `sodas` + `ash`, thus creating two entries.
+`sodash` can be formed from many different stitches. Even `--disable-expansion`, the existence of both `soda` + `ash` and `sodas` + `ash` causes there to be two entries
+for the same stitched word. 
 
 ## TODO
 
