@@ -1,35 +1,8 @@
 use core::fmt;
 use std::collections::HashSet;
 
-use crate::ext::*;
+use crate::{ext::*, Ctx, Position};
 use rayon::prelude::*;
-
-#[derive(Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
-pub enum Position {
-    /// Given word is to the left of the found word
-    /// <given> <found>
-    Left,
-    /// Given word is to the right of the found word
-    /// <found> <given>
-    Right,
-}
-
-impl fmt::Display for Position {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let lit = match self {
-            Position::Left => "left",
-            Position::Right => "right",
-        };
-
-        f.write_str(lit)
-    }
-}
-
-impl Position {
-    pub fn all() -> [Position; 2] {
-        [Position::Left, Position::Right]
-    }
-}
 
 #[derive(Debug, Copy, Clone)]
 pub struct Pairing<'a> {
@@ -169,33 +142,48 @@ pub struct Combo<'a> {
 }
 
 /// Provides all the extrapolations of a given word. Does not include the given word itself.
-fn extrap<'i>(
-    given: &'i str,
-    founds: &'i HashSet<&str>,
-) -> impl ParallelIterator<Item = (&'i str, Position)> {
-    founds.par_iter().filter_map(move |&found| {
-        if given.len() >= found.len() {
-            None
-        } else if found.starts_with(given) {
-            Some((found, Position::Left))
-        } else if found.ends_with(given) {
-            Some((found, Position::Right))
+fn extrap<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = (&'f str, Position)> {
+    let lambda: Box<dyn Fn(&&'f str) -> Option<(&'f str, Position)> + Send + Sync> =
+        if ctx.disable_exp {
+            Box::new(|_| None)
         } else {
-            None
-        }
-    })
+            Box::new(move |&found: &&'f str| {
+                if ctx.given.len() >= found.len() {
+                    None
+                } else {
+                    let starts = || found.starts_with(&ctx.given);
+                    let ends = || found.starts_with(&ctx.given);
+
+                    match ctx.exp_pos {
+                        Some(Position::Left) => starts().then_some((found, Position::Left)),
+                        Some(Position::Right) => ends().then_some((found, Position::Right)),
+                        None => {
+                            let pos = if starts() {
+                                Some(Position::Left)
+                            } else if ends() {
+                                Some(Position::Right)
+                            } else {
+                                None
+                            };
+
+                            pos.map(|p| (found, p))
+                        }
+                    }
+                }
+            })
+        };
+
+    ctx.founds.par_iter().filter_map(lambda)
 }
 
-pub fn find_all<'i>(
-    given: &'i str,
-    founds: &'i HashSet<&str>,
-) -> impl ParallelIterator<Item = Combo<'i>> {
-    let extrap = extrap(given, founds).map(|(found, pos)| (found, Some(pos)));
-    [(given, None)]
+pub fn find_all<'f>(ctx: &'f Ctx<'_>) -> impl ParallelIterator<Item = Combo<'f>> {
+    let extrap = extrap(ctx).map(|(found, pos)| (found, Some(pos)));
+
+    [(ctx.given.as_str(), None)]
         .into_par_iter()
         .chain(extrap)
         .flat_map(move |(expand_word, expand_pos)| {
-            founds
+            ctx.founds
                 .par_iter()
                 .map(|&found| Pairing {
                     given: expand_word,
@@ -204,13 +192,15 @@ pub fn find_all<'i>(
                 .flat_map(|pair| {
                     Position::all()
                         .into_par_iter()
+                        .filter(|&pos| ctx.pos.map_or(true, |p| p == pos))
                         .map(move |pos| Transform { pair, pos })
                 })
                 .flat_map(|trans| trans.stitches())
                 .map(move |stitch| Combo {
                     stitch,
-                    valid: stitch.valid(founds),
+                    valid: stitch.valid(&ctx.founds),
                     expand: expand_pos.map(|pos| (expand_word, pos)),
                 })
         })
+        .filter(|combo| ctx.valid.map_or(true, |b| b == combo.valid))
 }

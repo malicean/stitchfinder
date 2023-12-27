@@ -5,7 +5,7 @@ use anyhow::Context;
 use rayon::{prelude::ParallelIterator, slice::ParallelSliceMut};
 use tabled::Table;
 
-use crate::matcher::{Combo, Position};
+use crate::{matcher::Combo, Position};
 
 #[derive(tabled::Tabled, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct Row<'a> {

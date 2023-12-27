@@ -45,8 +45,8 @@ The meaning of the columns is:
 - `Rem-found` (remaining found): text of the found word without the intersection
 - `Pos` (position): where the given word is relative to the found word
 - `Valid`: whether the remaining given and found are valid words (i.e. are they in `popular.txt`)
-- `X-given` (extrapolated given): see [Extrapolation](#extrapolation)
-- `X-pos` (extrapolated position): see [Extrapolation](#extrapolation)
+- `X-given` (expanded given): see [Expansion](#expansion)
+- `X-pos` (expanded position): see [Expansion](#expansion)
 
 ### With Nushell
 
@@ -70,10 +70,10 @@ and any words with non-alphabetical characters were removed.
 - [popular.txt] was obtained from [this repository file](https://github.com/dolph/dictionary/blob/c65f04b0b5b27a981f437b940cf62fe71320d5ec/popular.txt)
 and had no filtering applied (there aren't any symbols to filter).
 
-## Extrapolation
+## Expansion
 
-Extrapolation is a somewhat-complex feature of stitchfinder. It takes the given word and expands it into
-other valid words, then using these expanded words as their own given words.  
+Expansion is a somewhat-complex feature of stitchfinder. It takes the given word and expands it into
+other, valid words, and then uses these expanded words as their own given words.  
 
 For example, let `ia` be the given word. `ia` expands into:
 
